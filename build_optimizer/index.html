@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MWI 多配装效率优化器</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="navbar app-navbar">
+    <div class="container-fluid">
+      <div class="brand-lockup">
+        <span class="brand-mark" aria-hidden="true">MW</span>
+        <span class="navbar-brand mb-0">MWI 配装效率优化器<small>COMBAT COMMAND</small></span>
+      </div>
+      <div class="app-status"><span class="status-dot"></span>本地计算 · 数据不会上传</div>
+    </div>
+  </nav>
+
+  <div class="container-fluid app-shell">
+    <ul class="nav nav-tabs command-tabs mb-4" id="mainTabs" role="tablist">
+      <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#pane-library"><span>01</span> 配装库</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#pane-team"><span>02</span> 队伍与地图</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#pane-results"><span>03</span> 对比结果</button></li>
+    </ul>
+
+    <div class="tab-content">
+      <!-- Build library -->
+      <div class="tab-pane fade show active" id="pane-library">
+        <div class="section-heading d-flex justify-content-between align-items-end mb-3">
+          <div><span class="eyebrow">LOADOUT ARCHIVE</span><h5>配装库 <small>每位成员最多 5 套</small></h5></div>
+          <div class="section-actions">
+            <button id="exportLibraryBtn" class="btn btn-outline-primary btn-sm">导出全部</button>
+            <button id="importLibraryBtn" class="btn btn-outline-secondary btn-sm">导入</button>
+            <input type="file" id="importLibraryInput" accept="application/json" hidden />
+            <button id="resetLibraryBtn" class="btn btn-outline-danger btn-sm">清空</button>
+          </div>
+        </div>
+        <div id="libraryRoot" class="row"></div>
+        <p class="storage-note mt-3 mb-0">所有数据均保存在本地应用数据。桌面版目录位于 EXE 同级的 <code>data</code> 文件夹。</p>
+      </div>
+
+      <!-- Team & zone -->
+      <div class="tab-pane fade" id="pane-team">
+        <div class="section-heading"><span class="eyebrow">SQUAD MATRIX</span><h5>选择参与对比的配装</h5><p>每位成员可勾选多套配装，程序会计算三人配装的全部组合。</p></div>
+        <div id="teamPickerRoot" class="row mb-4"></div>
+
+        <div class="section-heading section-heading-spaced"><span class="eyebrow">TARGET SELECTION</span><h5>选择战斗地图</h5></div>
+        <div class="zone-toolbar d-flex mb-2">
+          <input id="zoneFilter" class="form-control form-control-sm" placeholder="按名称筛选地图…" />
+          <button id="zoneSelectAllBtn" class="btn btn-outline-secondary btn-sm ms-2">全选地图（T1）</button>
+          <button id="zoneClearBtn" class="btn btn-outline-secondary btn-sm ms-2">清空</button>
+        </div>
+        <div class="d-flex align-items-center gap-1 mb-2 small">
+          <span class="text-muted me-1">批量勾选难度：</span>
+          <button class="btn btn-outline-secondary btn-sm zone-tier-all-btn" data-tier="0">T0</button>
+          <button class="btn btn-outline-secondary btn-sm zone-tier-all-btn" data-tier="1">T1</button>
+          <button class="btn btn-outline-secondary btn-sm zone-tier-all-btn" data-tier="2">T2</button>
+          <button class="btn btn-outline-secondary btn-sm zone-tier-all-btn" data-tier="3">T3</button>
+          <button class="btn btn-outline-secondary btn-sm zone-tier-all-btn" data-tier="4">T4</button>
+          <button class="btn btn-outline-secondary btn-sm zone-tier-all-btn" data-tier="5">T5</button>
+        </div>
+        <p class="text-muted small">每个地图可同时选择多个 T 级别；每个“地图 × T 级别”都会生成一个独立模拟 case。</p>
+        <div id="zoneList" class="zone-list mb-3" style="max-height: 360px; overflow-y: auto;"></div>
+
+        <div class="card info-card mb-3" id="combatConsumablesCard">
+          <div class="card-body py-2">
+            <h6 class="mb-1">战斗补给</h6>
+            <p class="text-muted small mb-0">吃喝保存在每套配装中。请在 Build 库中点击该配装的“吃喝”按钮修改；它只对使用该配装的角色生效，不会额外扩大组合数。</p>
+          </div>
+        </div>
+
+        <div class="run-panel row g-3 align-items-end">
+          <div class="col-auto">
+            <label class="form-label small">单 case 模拟时长（小时）</label>
+            <input type="number" id="simHoursInput" class="form-control form-control-sm" value="24" min="1" max="168" />
+          </div>
+          <div class="col-auto">
+            <label class="form-label small">并发 worker 数</label>
+            <input type="number" id="concurrencyInput" class="form-control form-control-sm" value="" placeholder="自动" min="1" />
+          </div>
+          <div class="col-auto">
+            <div class="form-check mt-4">
+              <input class="form-check-input" type="checkbox" id="combatDropQuantityBuffToggle" />
+              <label class="form-check-label" for="combatDropQuantityBuffToggle">
+                战斗掉落数量 Buff（+29.5%）
+              </label>
+            </div>
+          </div>
+          <div class="col-auto">
+            <span class="badge bg-secondary" id="comboEstimate">0 个组合</span>
+          </div>
+          <div class="col-auto">
+            <button id="startBatchBtn" class="btn btn-primary" disabled>开始对比</button>
+            <button id="cancelBatchBtn" class="btn btn-outline-danger ms-1" disabled>取消</button>
+          </div>
+        </div>
+
+        <div class="progress command-progress mt-3" style="height: 18px;">
+          <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%">0%</div>
+        </div>
+        <p class="storage-note mt-2 mb-0">
+          房屋等级从每份配装 JSON 的 <code>houseRooms</code> 导入并参与战斗。当前上游数据和导出格式不含公会神龛字段，因此神龛效果不会计入模拟。
+        </p>
+      </div>
+
+      <!-- Results -->
+      <div class="tab-pane fade" id="pane-results">
+        <div class="results-topbar d-flex justify-content-between align-items-center mb-3">
+          <div><span class="eyebrow">SIMULATION OUTPUT</span><span id="resultsSummary" class="results-summary">尚未运行</span></div>
+          <div class="section-actions">
+            <button id="exportCsvBtn" class="btn btn-outline-primary btn-sm">导出 CSV</button>
+            <button id="exportJsonBtn" class="btn btn-outline-secondary btn-sm">导出 JSON</button>
+          </div>
+        </div>
+        <div class="result-filters d-flex flex-wrap align-items-center gap-2 mb-3 small">
+          <label>难度 <select id="resultsTierFilter" class="form-select form-select-sm d-inline-block" style="width:auto"><option value="">全部</option><option value="0">T0</option><option value="1">T1</option><option value="2">T2</option><option value="3">T3</option><option value="4">T4</option><option value="5">T5</option></select></label>
+          <label>最大死亡/小时 <input id="resultsDeathsFilter" type="number" min="0" step="0.1" placeholder="不限" class="form-control form-control-sm d-inline-block" style="width:6rem"></label>
+          <label class="form-check"><input id="resultsBestOnly" class="form-check-input" type="checkbox"> 每张地图仅最佳</label>
+          <button id="resetResultsFiltersBtn" class="btn btn-outline-secondary btn-sm">清除筛选</button>
+          <span id="favoritesCount" class="text-muted">收藏 0</span>
+        </div>
+        <div class="table-responsive results-frame">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>队伍</th>
+                <th>地图 / 难度</th>
+                <th>钥匙</th>
+                <th>战斗补给</th>
+                <th class="text-end"><button class="btn btn-link btn-sm p-0 result-sort-btn" data-sort-field="totalKeysExpected" data-sort-label="碎片总数（期望）">碎片总数（期望）</button></th>
+                <th class="text-end"><button class="btn btn-link btn-sm p-0 result-sort-btn" data-sort-field="keysPerHour" data-sort-label="钥匙 / 小时">钥匙 / 小时 ↓</button></th>
+                <th class="text-end"><button class="btn btn-link btn-sm p-0 result-sort-btn" data-sort-field="encountersPerHour" data-sort-label="战斗 / 小时">战斗 / 小时</button></th>
+                <th class="text-end"><button class="btn btn-link btn-sm p-0 result-sort-btn" data-sort-field="deathsPerHour" data-sort-label="死亡 / 小时">死亡 / 小时</button></th>
+                <th>MP 消耗 / 耗尽</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody id="resultsTable">
+              <tr><td colspan="11" class="text-center text-muted">运行后这里显示排名</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add build modal -->
+  <div class="modal fade" id="addBuildModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addBuildModalTitle">添加配装</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label small">名称</label>
+            <input id="addBuildName" class="form-control form-control-sm" placeholder="例如：T4 速刷" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">MWI 格式 JSON</label>
+            <textarea id="addBuildJson" class="form-control" rows="12" placeholder='{"player":{"attackLevel":...},"abilities":[...]}'></textarea>
+          </div>
+          <div id="addBuildError" class="text-danger small"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button class="btn btn-primary" id="addBuildSave">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="suppliesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="suppliesModalTitle">修改吃喝</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="text-muted small">此选择会写入该配装的原始 JSON，并只对使用此配装的角色生效。</p>
+        <div class="mb-3"><div class="small text-muted mb-1">食物（四选三）</div><div id="buildFoodOptions" class="d-flex flex-wrap gap-2"></div></div>
+        <div><div class="small text-muted mb-1">咖啡（幸运咖啡固定 + 属性咖啡七选二）</div><div id="buildCoffeeOptions" class="d-flex flex-wrap gap-2"></div></div>
+        <hr><div class="small text-muted mb-1">同时复制到该用户其他配装（可选）</div><div id="copySuppliesTargets" class="d-flex flex-wrap gap-2"></div>
+        <div id="buildSuppliesError" class="text-danger small mt-2"></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" id="buildSuppliesSave">保存吃喝</button></div>
+    </div></div>
+  </div>
+
+  <!-- Edit build modal -->
+  <div class="modal fade" id="editBuildModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editBuildModalTitle">修改配装</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label small">名称</label>
+            <input id="editBuildName" class="form-control form-control-sm" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">原始 MWI JSON（可直接修改）</label>
+            <textarea id="editBuildJson" class="form-control font-monospace" rows="22"></textarea>
+          </div>
+          <div id="editBuildError" class="text-danger small"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button class="btn btn-primary" id="editBuildSave">保存修改</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Build details modal -->
+  <div class="modal fade" id="jsonModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="jsonModalTitle">查看</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="jsonModalBody"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="bundle.js"></script>
+</body>
+</html>

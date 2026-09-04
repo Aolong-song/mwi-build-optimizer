@@ -1,0 +1,35 @@
+# Publish only the maintained web application and its documentation.
+/*
+!/.gitignore
+!/README.md
+!/build_optimizer/
+!/build_optimizer/**
+
+# Dependencies and generated bundles
+build_optimizer/node_modules/
+build_optimizer/dist/
+build_optimizer/release/
+build_optimizer/release-*/
+build_optimizer/_asar_staging*/
+build_optimizer/.webpack/
+
+# Local Electron application data and imported player builds
+build_optimizer/data/
+build_optimizer/_electron_test_data/
+build_optimizer/_mwi_data_backup*/
+build_optimizer/*.user.json
+build_optimizer/*build*.json
+
+# Local diagnostics, smoke-test artifacts, and screenshots
+build_optimizer/*.log
+build_optimizer/_smoke_*.mjs
+build_optimizer/_debug_*.mjs
+build_optimizer/_test_*.mjs
+build_optimizer/_rg_out.txt
+build_optimizer/_cleanup.ps1
+build_optimizer/_inspect.ps1
+build_optimizer/*ui-check*.png
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
